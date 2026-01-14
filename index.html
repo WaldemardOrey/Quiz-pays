@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Géo - Pays Lusophones</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #2ecc71;
+            --error: #e74c3c;
+            --bg: #f4f7f6;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: var(--primary);
+        }
+
+        #quiz-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            transition: all 0.5s ease;
+        }
+
+        .header {
+            margin-bottom: 20px;
+        }
+
+        #map-wrapper {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #map-image {
+            max-width: 100%;
+            max-height: 100%;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .timer-bar {
+            height: 5px;
+            background: var(--accent);
+            width: 0%;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            transition: width 3s linear;
+        }
+
+        .options-container {
+            display: grid;
+            gap: 10px;
+        }
+
+        button {
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        button:hover:not(:disabled) {
+            border-color: var(--accent);
+            background: #f0f8ff;
+        }
+
+        button:disabled {
+            cursor: default;
+        }
+
+        button.correct {
+            background-color: var(--success) !important;
+            color: white;
+            border-color: var(--success);
+        }
+
+        button.wrong {
+            background-color: var(--error) !important;
+            color: white;
+            border-color: var(--error);
+        }
+
+        .hidden { display: none; }
+
+        .fade-in { animation: fadeIn 0.5s forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #score-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div id="quiz-container">
+    <div id="game-zone">
+        <div class="header">
+            <span id="question-number">Question 1 / 5</span>
+        </div>
+
+        <div id="map-wrapper">
+            <img id="map-image" src="" alt="Carte du pays">
+            <div id="timer-bar" class="timer-bar"></div>
+        </div>
+
+        <div id="options" class="options-container">
+            <!-- Les boutons seront générés ici -->
+        </div>
+    </div>
+
+    <div id="result-zone" class="hidden">
+        <h2>Quiz terminé !</h2>
+        <p id="score-text"></p>
+        <button onclick="location.reload()" style="background: var(--accent); color: white; border: none;">Recommencer</button>
+    </div>
+</div>
+
+<script>
+    const quizData = [
+        {
+            name: "Portugal",
+            imgBlank: "./images/1.png",
+            imgLabeled: "./images/1.1.png",
+            distractors: ["Italie", "Grèce", "Norvège", "Pologne"]
+        },
+        {
+            name: "Brésil",
+               imgBlank: "./images/2.png",
+            imgLabeled: "./images/1.2.png",
+             distractors: ["Mexique", "Chili", "Thaïlande", "Canada"]
+        },
+        {
+            name: "Angola",
+              imgBlank: "./images/3.png",
+            imgLabeled: "./images/1.3.png",
+              distractors: ["Égypte", "Sénégal", "Kenya", "Maroc"]
+        },
+        {
+            name: "Cap-Vert",
+               imgBlank: "./images/4.png",
+            imgLabeled: "./images/1.4.png",
+              distractors: ["Madagascar", "Islande", "Japon", "Nouvelle-Zélande"]
+        },
+        {
+            name: "Mozambique",
+               imgBlank: "./images/5.png",
+            imgLabeled: "./images/1.5.png",
+             distractors: ["Nigeria", "Éthiopie", "Mali", "Algérie"]
+        }
+    ];
+
+    let currentStep = 0;
+    let score = 0;
+    let canClick = true;
+
+    const mapImg = document.getElementById('map-image');
+    const timerBar = document.getElementById('timer-bar');
+    const optionsDiv = document.getElementById('options');
+    const questionNum = document.getElementById('question-number');
+
+    function loadQuestion() {
+        if (currentStep >= quizData.length) {
+            showResults();
+            return;
+        }
+
+        canClick = true;
+        const data = quizData[currentStep];
+        
+        // Setup visuel
+        questionNum.innerText = `Question ${currentStep + 1} / 5`;
+        mapImg.style.opacity = '0';
+        
+        setTimeout(() => {
+            mapImg.src = data.imgBlank;
+            mapImg.style.opacity = '1';
+        }, 300);
+
+        timerBar.style.transition = 'none';
+        timerBar.style.width = '0%';
+
+        // Mélange des options
+        // On prend 2 distracteurs aléatoires qui ne sont pas voisins (déjà filtrés dans notre data)
+        let choices = [data.name];
+        let shuffledDistractors = [...data.distractors].sort(() => 0.5 - Math.random());
+        choices.push(shuffledDistractors[0], shuffledDistractors[1]);
+        choices.sort(() => 0.5 - Math.random());
+
+        optionsDiv.innerHTML = '';
+        choices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.innerText = choice;
+            btn.onclick = () => handleAnswer(choice, btn);
+            optionsDiv.appendChild(btn);
+        });
+    }
+
+    function handleAnswer(selectedName, selectedBtn) {
+        if (!canClick) return;
+        canClick = false;
+
+        const data = quizData[currentStep];
+        const isCorrect = selectedName === data.name;
+        if (isCorrect) score++;
+
+        // Lancer le compte à rebours visuel
+        timerBar.style.transition = 'width 3s linear';
+        timerBar.style.width = '100%';
+
+        // Désactiver les boutons
+        const buttons = optionsDiv.querySelectorAll('button');
+        buttons.forEach(b => b.disabled = true);
+
+        // Attendre 3 secondes
+        setTimeout(() => {
+            // Afficher la réponse
+            mapImg.style.opacity = '0.5';
+            setTimeout(() => {
+                mapImg.src = data.imgLabeled;
+                mapImg.style.opacity = '1';
+            }, 300);
+
+            // Colorer les boutons
+            buttons.forEach(b => {
+                if (b.innerText === data.name) {
+                    b.classList.add('correct');
+                } else if (b === selectedBtn && !isCorrect) {
+                    b.classList.add('wrong');
+                }
+            });
+
+            // Passer à la suite après un court délai pour voir la réponse
+            setTimeout(() => {
+                currentStep++;
+                loadQuestion();
+            }, 2500);
+
+        }, 3000);
+    }
+
+    function showResults() {
+        document.getElementById('game-zone').classList.add('hidden');
+        const resZone = document.getElementById('result-zone');
+        resZone.classList.remove('hidden');
+        resZone.classList.add('fade-in');
+        document.getElementById('score-text').innerText = `Tu as obtenu ${score} / 5`;
+    }
+
+    // Initialisation
+    loadQuestion();
+
+</script>
+
+</body>
+</html>
